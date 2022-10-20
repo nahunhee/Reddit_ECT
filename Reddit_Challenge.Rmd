@@ -1,0 +1,187 @@
+#for Reddit Challenge 
+```{r echo=FALSE}
+library(tidyverse)
+library(corrplot)
+library(Hmisc) 
+library(ggcorrplot) 
+library(corrr)
+```
+
+# Update existing dataframe for policy-level challenge
+# ALREADY PROCESSED! DON'T NEED TO RUN THIS BLOCK AGAIN
+```{r}
+all_df <- readxl::read_xlsx('Files/Reddit_data_2806_July_1.xlsx')
+df <- readxl::read_xlsx('Files/Comparison_Policy-level_107.xlsx')
+df <- df %>%
+  select(c('Hunhui', 'Bret', 'content'))
+
+all_df$`C: Misc` <- df$Hunhui[match(all_df$content, df$content)]
+all_df$`C: Misc`[is.na(all_df$`C: Misc`)] <- 0
+all_df
+writexl::write_xlsx(all_df, 'Files/Reddit_data_2806_policy_update.xlsx')
+```
+
+# Filtering and pre-processing data
+```{r}
+df <- readxl::read_xlsx('Files/Reddit_data_2806_policy_update.xlsx')
+df <- df %>%
+  #left only teachers' challenges and their employment status
+  select( c(colnames(df)[24:32], "In-service", "Substitue/part-time/temporary/unstable position"))
+#change column names
+colnames(df) <- c("High workload", "Insufficient support", "Communication with parents", "Classroom management", "Planning", "Personal concerns", "Relationships with other teachers", "Instruct", "Policy", "Regular teachers", "Substitute/part-time teachers")
+
+#reorder column from individual level to policy level
+df <- df[, c(6, 4, 5, 8, 1, 2, 7, 3, 9, 10, 11)]
+#check the result
+# [1] "Personal concerns"                                "Classroom management"                             "Planning"                                        
+# [4] "Instruct"                                         "High workload"                                    "Insufficient support"                            
+# [7] "Relationships with other teachers/administrators" "Communication with parents"                       "Policy"                                          
+# [10] "Regular teachers"                                "Substitute/part-time teachers"   
+print(colnames(df))
+
+#filter dataframe --> a total of 1,250
+df_total <- df %>%
+  filter(`Regular teachers` == 1 | `Substitute/part-time teachers` == 1) %>%
+  select(-c("Regular teachers", "Substitute/part-time teachers"))
+
+#986
+df_regular <- df %>%
+  filter(`Regular teachers` == 1) %>%
+  select(-c("Regular teachers", "Substitute/part-time teachers"))
+
+#264
+df_sub <- df %>%
+  filter(`Substitute/part-time teachers` == 1) %>%
+  select(-c("Regular teachers", "Substitute/part-time teachers"))
+```
+
+#Draw graphs
+```{r}
+#function for computing percentages of each column
+#Note: this percentage is computed by dividing the sum of each column by the total number of posts(1250). 
+#Note: Some posts have no challenges. I did not filter these "no challenge posts" 
+getCount_Percentage <- function(dataframe){
+  col_name_list <- colnames(dataframe)
+  sum_list <- vector()
+  for (x in col_name_list) {
+    sum_list <- append(sum_list, sum( dataframe[[x]]) )
+  }
+  
+  df_temp <- data.frame( Challenges = col_name_list, value = sum_list)
+  df_temp$Challenges <- factor(df_temp$Challenges, levels = df_temp$Challenges)
+  total <- dim(dataframe)[1]
+  df_temp <- df_temp %>%
+    mutate(percentage = value * 100 / total)
+  print(df_temp)
+  return(df_temp)
+}
+
+df_total %>%
+  getCount_Percentage() %>%
+  mutate(Category = ifelse(Challenges == 'Personal concerns', 'Personal', 
+                    ifelse(Challenges == 'Planning' | Challenges == 'Instruct' | Challenges == 'Classroom management', 'Interpersonal',
+                    ifelse(Challenges == 'High workload' | Challenges == 'Insufficient support' | Challenges == 'Relationships with other teachers', 'Institutional',
+                    ifelse(Challenges == 'Communication with parents', 'Community',
+                    ifelse(Challenges == 'Policy', 'Public policy', 0)))))
+  ) %>%
+  mutate(Category = factor(Category, levels = unique(Category))) %>% #levels : this is for re-ordering bars
+  ggplot(aes(fill=Challenges, y=percentage, x=Category )) + 
+    geom_bar(position="stack", stat="identity") +  
+    # geom_text(aes(label = Challenges),  position="stack", stat="identity", vjust = 1.5) +
+    theme_bw() + 
+    theme(
+      axis.text.x = element_text(angle = 0, vjust = 0, hjust=0.5), 
+      # plot.title = element_text(face = "bold", size = 12), 
+      # legend.position = "none", 
+      axis.ticks =  element_line(colour = "grey70", size = 0.2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )+
+    labs(y= "Proportion", x = "Challenges frame by Socio-ecology model") 
+
+df_regular_grouped <- df_regular %>%
+  getCount_Percentage() %>%
+  mutate(Group = 1)
+
+df_sub_grouped <- df_sub %>%
+  getCount_Percentage() %>%
+  mutate(Group = 2)
+
+df_total_grouped <- rbind(df_regular_grouped, df_sub_grouped) %>%
+  mutate(Category = ifelse(Challenges == 'Personal concerns', 'Personal', 
+                    ifelse(Challenges == 'Planning' | Challenges == 'Instruct' | Challenges == 'Classroom management', 'Interpersonal',
+                    ifelse(Challenges == 'High workload' | Challenges == 'Insufficient support' | Challenges == 'Relationships with other teachers', 'Institutional',
+                    ifelse(Challenges == 'Communication with parents', 'Community',
+                    ifelse(Challenges == 'Policy', 'Public policy', 0)))))
+  ) %>%
+  mutate(Category = factor(Category, levels = unique(Category))) #this one is for re-ordering bars
+  
+ggplot(data=df_total_grouped, aes(fill=Challenges, y=percentage, x=Group)) +
+  geom_bar(stat = "identity",
+           position = "stack") +
+  facet_grid(~ Category) +
+  theme_bw() + 
+    theme(  
+      axis.text.x=element_blank(), #remove x axis labels
+      axis.ticks.x=element_blank(), #remove x axis ticks
+      # axis.ticks =  element_line(colour = "grey70", size = 0.2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )+
+    labs(y= "Proportion", x = "Teacher of Full-time (left), temporary (right) job position") 
+
+ggsave("Challenge_Comparision.png", width=10, height=6) 
+
+```
+# Draw some correlation matrix
+# In this section, I filtered out "no challenge posts" because we are trying to find relationships between challenges
+```{r} 
+
+#Function to return correlation matrix plot
+#Now... asterisks are overlapped with texts...
+drawCorrelationMatrix <- function(dataframe, font_size = 1){ 
+  dataframe.cor <- cor(dataframe, method='spearman')
+  dataframe.p.mat <- cor_pmat(dataframe)
+  dataframe.p.mat[1,1] = 1
+  dataframe.p.mat[2,2] = 1
+  dataframe.p.mat[3,3] = 1  #In order to remove *** of cells in digonal
+  dataframe.p.mat[4,4] = 1
+  dataframe.p.mat[5,5] = 1
+  t <- corrplot(dataframe.cor, p.mat = dataframe.p.mat,   method = 'color',  addgrid.col = 'grey50', addCoef.col = 'black',
+                tl.srt = 45, tl.cex=0.6, cl.ratio = 0.2, number.cex = font_size,
+                col.lim = c(-1, 1), sig.level = c(0.001, 0.01, 0.05), pch.cex = 1.5,
+                insig = 'label_sig', pch.col = 'black', order = 'AOE',col=colorRampPalette(c("blue","white","red"))(200))
+  return(t)
+}
+
+#filter posts having at least one challenge
+df_regular <- df_regular %>%
+  filter( !(`Personal concerns` == 0 & Planning == 0 & Instruct == 0 & `Classroom management` == 0 & `High workload` == 0 & `Insufficient support` == 0 &
+            `Relationships with other teachers` == 0 & `Communication with parents` == 0 & Policy == 0) )
+
+df_sub <- df_sub %>%
+  filter( !(`Personal concerns` == 0 & Planning == 0 & Instruct == 0 & `Classroom management` == 0 & `High workload` == 0 & `Insufficient support` == 0 &
+            `Relationships with other teachers` == 0 & `Communication with parents` == 0 & Policy == 0) )
+
+df_regular %>% 
+  mutate(Personal = ifelse(`Personal concerns` == 1, 1, 0)) %>%
+  mutate(Interpersonal = ifelse( (Planning == 1 | Instruct == 1 | `Classroom management` == 1), 1, 0)) %>%
+  mutate(Institutional = ifelse( (`High workload` == 1 | `Insufficient support` == 1 | `Relationships with other teachers` == 1), 1, 0)) %>%
+  mutate(Community = ifelse(`Communication with parents`, 1, 0)) %>%
+  mutate(`Public policy` = ifelse(Policy == 1, 1, 0)) %>%
+  .[,10:14] %>% 
+  drawCorrelationMatrix()
+ 
+ 
+
+df_sub %>% 
+  mutate(Personal = ifelse(`Personal concerns` == 1, 1, 0)) %>%
+  mutate(Interpersonal = ifelse(Planning == 1 | Instruct == 1 | `Classroom management` == 1, 1, 0)) %>%
+  mutate(Institutional = ifelse(`High workload` == 1 | `Insufficient support` == 1 | `Relationships with other teachers` == 1, 1, 0)) %>%
+  mutate(Community = ifelse(`Communication with parents`, 1, 0)) %>%
+  mutate(`Public policy` = ifelse(Policy == 1, 1, 0)) %>%
+  .[,10:14] %>%
+  drawCorrelationMatrix()
+
+```
+

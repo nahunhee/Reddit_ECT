@@ -1,0 +1,212 @@
+installation & cleansing 
+```{r}
+library(tidyverse)
+library(readxl) 
+library(writexl)  
+library(hrbrthemes)
+
+
+df <- readxl::read_xlsx("Reddit_data_2806_July_1.xlsx") %>%
+  mutate_if(is.numeric, replace_na, replace = 0) 
+
+#total 2806
+
+#drop [removed] or [deleted] contents
+#then 2445 posts left
+df <- df %>%
+  filter(!content == "[deleted]" ) %>%
+  filter(!content == "[removed]" )
+
+glimpse(df)
+
+```
+
+draw graphs
+```{r}
+library(ggplot2)
+
+#total : 2445
+#in-service : 983
+#sub teachers : 263
+#both teachers : 1246
+#pre-service : 1037
+#not identified : 162
+
+df_total <- df 
+
+#prek : 31
+#k-6 : 471
+#7-12 : 496
+#higher : 11
+#not identified : 1481
+
+#k6 sub : 60
+#k6 inservice : 199
+#k6 both : 259
+#k6 pre : 198
+
+#712 sub : 66
+#712 inservice : 216
+#712 both : 282
+#712 pre : 210
+
+df_preK <- df %>%
+  filter(`Pre-K` == 1)
+df_k6 <- df %>%
+  filter(`K-6` == 1)
+df_712 <- df %>%
+  filter(`7 to 12` == 1)
+df_higher <- df %>%
+  filter(Higher == 1)
+
+df_k6_sub <- df_k6 %>% filter(`Substitue/part-time/temporary/unstable position` == 1)
+df_k6_inservice  <- df_k6 %>% filter(`In-service` == 1)
+df_k6_both <- rbind(df_k6_sub, df_k6_inservice)
+df_k6_pre <- df_k6 %>% filter(`pre-service` == 1)
+
+df_712_sub <- df_712 %>% filter(`Substitue/part-time/temporary/unstable position` == 1)
+df_712_inservice <- df_712 %>% filter(`In-service` == 1)
+df_712_both <- rbind(df_712_sub, df_712_inservice)
+df_712_pre <- df_712 %>% filter(`pre-service` == 1)
+
+```
+
+Draw single group graph
+```{r}
+#function
+drawSingleGroupGraphs <- function(dataframe, title) {
+  #8 to 23
+  col_name_list <- colnames(df)[8:23] 
+  sum_list <- vector()
+  for (x in col_name_list) {
+    sum_list <- append(sum_list, sum( dataframe[[x]]) )
+  }
+  
+  df_temp <- data.frame( name = col_name_list, value = sum_list)
+  df_temp$name <- factor(df_temp$name, levels = df_temp$name)
+  total <- dim(dataframe)[1]
+  df_temp <- df_temp %>%
+    mutate(percentage = value * 100 / total)
+  myplot <- ggplot(df_temp, aes(x=name, y=percentage, fill = name)) + 
+    geom_bar(stat='identity', alpha = 1) + 
+    ggtitle(title) +
+    ylim(0, 100) +
+    theme_bw() + 
+    theme(
+      axis.text.x = element_text(angle = 50, vjust = 1, hjust=1), 
+      # plot.title = element_text(face = "bold", size = 12), 
+      legend.position = "none", 
+      axis.ticks =  element_line(colour = "grey70", size = 0.2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    ) +
+    labs(y= "Percentage of posts", x = "")
+   
+  myplot  
+}
+
+#total
+drawSingleGroupGraphs(df_total, "")
+ggsave("Figure1.png", width=8, height=6)
+```
+
+
+Draw multiple group graph as stacked barchart with percentage
+```{r}
+
+#convert dataframe to simpler one for ggplot
+changeDFforPercentages <- function(dataframe, groupName){
+  col_name_list <- colnames(df)[8:23] 
+  sum_list <- vector()
+  for (x in col_name_list) {
+    sum_list <- append(sum_list, sum( dataframe[[x]]) )
+  }
+  
+  df_temp <- data.frame( name = col_name_list, value = sum_list)
+  df_temp$name <- factor(df_temp$name, levels = df_temp$name)
+  total <- dim(dataframe)[1]
+  df_temp <- df_temp %>%
+    mutate(percentage = value * 100 / total) %>%
+    mutate(group = groupName)
+  
+  df_temp
+  return(df_temp)
+}
+
+drawMultipleGraphs <- function( dataframe, title){
+  ggplot(dataframe, aes(fill=name , y=percentage, x=name)) + 
+    geom_bar(position="dodge", stat="identity") + 
+    ggtitle(title) +
+    ylim(0, 100) + 
+    theme_bw() + 
+    theme(
+      axis.text.x = element_text(angle = 50, vjust = 1, hjust=1), 
+      # plot.title = element_text(face = "bold", size = 12), 
+      legend.position = "none", 
+      axis.ticks =  element_line(colour = "grey70", size = 0.2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    ) +
+    labs(y= "Percentage of posts", x = "") +
+    facet_wrap(~fct_rev(group), ncol = 1)
+    facet_wrap(~group, ncol = 1)
+}
+
+# analysis for types of educators 
+df_regular_teachers <- df_total %>% filter(`In-service` == 1) %>% changeDFforPercentages(., "Full-time teachers")
+df_subbing_teachers <- df_total %>% filter(`Substitue/part-time/temporary/unstable position` == 1) %>% changeDFforPercentages(., "Substitute or part-time teachers")
+df_inservice_teachers <- df_total %>% filter(`In-service` == 1 | `Substitue/part-time/temporary/unstable position` == 1) %>% changeDFforPercentages(., "In-service teachers")
+df_preservice_teachers <- df_total %>% filter(`pre-service` == 1) %>% changeDFforPercentages(., "Pre-service teachers")
+
+#draw barchart for pre-service and in-service teachers
+df_for_career_stage <- rbind(df_preservice_teachers, df_inservice_teachers)
+drawMultipleGraphs(df_for_career_stage, "")
+ggsave("Figure2.png", width=8, height=6)
+
+#draw barchart for full-time vs substitue teachers
+df_for_types_of_educators <- rbind(df_regular_teachers, df_subbing_teachers)
+drawMultipleGraphs(df_for_types_of_educators, "") 
+ggsave("Figure3.png", width=8, height=6)
+
+#analysis for school grades
+df_preK <- df_total %>%   filter(`Pre-K` == 1) %>% changeDFforPercentages(., "Pre-K")
+df_k6 <- df_total %>%   filter(`K-6` == 1) %>% changeDFforPercentages(., "Primary(Grades K-6)")
+df_712 <- df_total %>%   filter(`7 to 12` == 1) %>% changeDFforPercentages(., "Secondary(Grades 7-12)")
+df_higher <- df_total %>%   filter(Higher == 1) %>% changeDFforPercentages(., "High")
+
+#draw barchart for K-6 vs 7-12 in all types of educators 
+df_for_school_grades <- rbind(df_k6, df_712)
+drawMultipleGraphs(df_for_school_grades, "")
+ggsave("Figure4.png", width=8, height=6)
+
+                              
+
+#analysis for school grades ->  types of educators 
+df_k6_regular_teachers <- df_total %>% filter(`In-service` == 1)  %>%   filter(`K-6` == 1) %>% changeDFforPercentages(., "K6-Regular teacher")
+df_k6_subbing_teachers <- df_total %>% filter(`Substitue/part-time/temporary/unstable position` == 1)  %>%   filter(`K-6` == 1) %>% changeDFforPercentages(., "K6-Subbing teacher")
+df_k6_inservice_teachers <- df_total %>% filter(`In-service` == 1 | `Substitue/part-time/temporary/unstable position` == 1) %>%   filter(`K-6` == 1) %>% changeDFforPercentages(., "Beginning in-service teachers on primary school-level (Grade K-6)")
+df_k6_preservice_teachers <- df_total %>% filter(`pre-service` == 1) %>%   filter(`K-6` == 1) %>% changeDFforPercentages(., "Pre-service teachers on primary school-level (Grade K-6)")
+
+df_712_regular_teachers <- df_total %>% filter(`In-service` == 1)  %>%   filter(`7 to 12` == 1) %>% changeDFforPercentages(., "712-Regular teacher")
+df_712_subbing_teachers <- df_total %>% filter(`Substitue/part-time/temporary/unstable position` == 1)  %>%   filter(`7 to 12` == 1) %>% changeDFforPercentages(., "712-Subbing teacher")
+df_712_inservice_teachers <- df_total %>% filter(`In-service` == 1 | `Substitue/part-time/temporary/unstable position` == 1) %>%   filter(`7 to 12` == 1) %>% changeDFforPercentages(., "Beginning in-service teachers on secondary school-level (Grade 7-12)")
+df_712_preservice_teachers <- df_total %>% filter(`pre-service` == 1) %>%   filter(`7 to 12` == 1) %>% changeDFforPercentages(., "Pre-service teachers on secondary school-level (Grade 7-12)")
+
+#draw barchart for K-6 vs 7-12 in in-service teachers 
+df_for_k6_712_in_service <- rbind(df_k6_inservice_teachers, df_712_inservice_teachers)
+drawMultipleGraphs(df_for_k6_712_in_service, "")
+ggsave("Figure5.png", width=8, height=6)
+
+#draw barchart for K-6 vs 7-12 in in-service teachers 
+df_for_k6_712_pre_service <- rbind(df_k6_preservice_teachers, df_712_preservice_teachers)
+drawMultipleGraphs(df_for_k6_712_pre_service, "")
+ggsave("Figure6.png", width=8, height=6)
+
+ 
+```
+
+
+```{r}
+
+```
+
