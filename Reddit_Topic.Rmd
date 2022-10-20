@@ -4,9 +4,11 @@ library(tidyverse)
 library(readxl) 
 library(writexl)  
 library(hrbrthemes)
+library(RColorBrewer)
 
 
-df <- readxl::read_xlsx("Reddit_data_2806_July_1.xlsx") %>%
+
+df <- readxl::read_xlsx("Files/Reddit_data_2806_July_1.xlsx") %>%
   mutate_if(is.numeric, replace_na, replace = 0) 
 
 #total 2806
@@ -74,6 +76,8 @@ df_712_pre <- df_712 %>% filter(`pre-service` == 1)
 Draw single group graph
 ```{r}
 #function
+colourCount = 16
+getPalette = colorRampPalette(brewer.pal(9, "Set1"))
 drawSingleGroupGraphs <- function(dataframe, title) {
   #8 to 23
   col_name_list <- colnames(df)[8:23] 
@@ -87,8 +91,9 @@ drawSingleGroupGraphs <- function(dataframe, title) {
   total <- dim(dataframe)[1]
   df_temp <- df_temp %>%
     mutate(percentage = value * 100 / total)
-  myplot <- ggplot(df_temp, aes(x=name, y=percentage, fill = name)) + 
+  myplot <- ggplot(df_temp, aes(x=name, y=percentage, fill = name)) +  
     geom_bar(stat='identity', alpha = 1) + 
+    scale_fill_manual(values = getPalette(colourCount)) + 
     ggtitle(title) +
     ylim(0, 100) +
     theme_bw() + 
@@ -107,13 +112,12 @@ drawSingleGroupGraphs <- function(dataframe, title) {
 
 #total
 drawSingleGroupGraphs(df_total, "")
-ggsave("Figure1.png", width=8, height=6)
+ggsave("Topic_figures/Figure1_new_color.png", width=8, height=6)
 ```
 
 
 Draw multiple group graph as stacked barchart with percentage
 ```{r}
-
 #convert dataframe to simpler one for ggplot
 changeDFforPercentages <- function(dataframe, groupName){
   col_name_list <- colnames(df)[8:23] 
@@ -136,6 +140,7 @@ changeDFforPercentages <- function(dataframe, groupName){
 drawMultipleGraphs <- function( dataframe, title){
   ggplot(dataframe, aes(fill=name , y=percentage, x=name)) + 
     geom_bar(position="dodge", stat="identity") + 
+    scale_fill_manual(values = getPalette(colourCount)) + 
     ggtitle(title) +
     ylim(0, 100) + 
     theme_bw() + 
@@ -148,7 +153,7 @@ drawMultipleGraphs <- function( dataframe, title){
       panel.grid.minor.x = element_blank()
     ) +
     labs(y= "Percentage of posts", x = "") +
-    facet_wrap(~fct_rev(group), ncol = 1)
+    # facet_wrap(~fct_rev(group), ncol = 1) #on/off required
     facet_wrap(~group, ncol = 1)
 }
 
@@ -161,12 +166,12 @@ df_preservice_teachers <- df_total %>% filter(`pre-service` == 1) %>% changeDFfo
 #draw barchart for pre-service and in-service teachers
 df_for_career_stage <- rbind(df_preservice_teachers, df_inservice_teachers)
 drawMultipleGraphs(df_for_career_stage, "")
-ggsave("Figure2.png", width=8, height=6)
+ggsave("Topic_figures/Figure2_new_color.png", width=8, height=6)
 
 #draw barchart for full-time vs substitue teachers
 df_for_types_of_educators <- rbind(df_regular_teachers, df_subbing_teachers)
 drawMultipleGraphs(df_for_types_of_educators, "") 
-ggsave("Figure3.png", width=8, height=6)
+ggsave("Topic_figures/Figure3_new_color.png", width=8, height=6)
 
 #analysis for school grades
 df_preK <- df_total %>%   filter(`Pre-K` == 1) %>% changeDFforPercentages(., "Pre-K")
@@ -177,7 +182,7 @@ df_higher <- df_total %>%   filter(Higher == 1) %>% changeDFforPercentages(., "H
 #draw barchart for K-6 vs 7-12 in all types of educators 
 df_for_school_grades <- rbind(df_k6, df_712)
 drawMultipleGraphs(df_for_school_grades, "")
-ggsave("Figure4.png", width=8, height=6)
+ggsave("Topic_figures/Figure4_new_color.png", width=8, height=6)
 
                               
 
@@ -195,12 +200,12 @@ df_712_preservice_teachers <- df_total %>% filter(`pre-service` == 1) %>%   filt
 #draw barchart for K-6 vs 7-12 in in-service teachers 
 df_for_k6_712_in_service <- rbind(df_k6_inservice_teachers, df_712_inservice_teachers)
 drawMultipleGraphs(df_for_k6_712_in_service, "")
-ggsave("Figure5.png", width=8, height=6)
+ggsave("Topic_figures/Figure5_new_color.png", width=8, height=6)
 
 #draw barchart for K-6 vs 7-12 in in-service teachers 
 df_for_k6_712_pre_service <- rbind(df_k6_preservice_teachers, df_712_preservice_teachers)
 drawMultipleGraphs(df_for_k6_712_pre_service, "")
-ggsave("Figure6.png", width=8, height=6)
+ggsave("Topic_figures/Figure6_new_color.png", width=8, height=6)
 
  
 ```

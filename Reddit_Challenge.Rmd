@@ -3,6 +3,7 @@
 library(tidyverse)
 library(corrplot)
 library(Hmisc) 
+library(ggplot2)
 library(ggcorrplot) 
 library(corrr)
 ```
@@ -21,15 +22,25 @@ all_df
 writexl::write_xlsx(all_df, 'Files/Reddit_data_2806_policy_update.xlsx')
 ```
 
-# Filtering and pre-processing data
+# Make a dataset containing title, content, challenges, and teacher types
 ```{r}
 df <- readxl::read_xlsx('Files/Reddit_data_2806_policy_update.xlsx')
+colnames(df)
 df <- df %>%
   #left only teachers' challenges and their employment status
-  select( c(colnames(df)[24:32], "In-service", "Substitue/part-time/temporary/unstable position"))
-#change column names
-colnames(df) <- c("High workload", "Insufficient support", "Communication with parents", "Classroom management", "Planning", "Personal concerns", "Relationships with other teachers", "Instruct", "Policy", "Regular teachers", "Substitute/part-time teachers")
+  select( c("title", "content", colnames(df)[24:32], "In-service", "Substitue/part-time/temporary/unstable position")) %>%
+  filter(`In-service` == 1 | `Substitue/part-time/temporary/unstable position` == 1)
+# #change column names
+colnames(df) <- c("Title", "Content", "High workload", "Insufficient support", "Communication with parents", "Classroom management", "Planning", "Personal concerns", "Relationships with other teachers", "Instruct", "Policy", "Regular teachers", "Substitute/part-time teachers")
 
+writexl::write_xlsx(df, 'Files/Reddit_data_1250_challenges_with_texts.xlsx')
+```
+
+# Filtering and pre-processing data
+```{r}
+df <- readxl::read_xlsx('Files/Reddit_data_1250_challenges_with_texts.xlsx')
+df <- df%>%
+  select(-c("Title", "Content"))
 #reorder column from individual level to policy level
 df <- df[, c(6, 4, 5, 8, 1, 2, 7, 3, 9, 10, 11)]
 #check the result
