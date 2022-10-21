@@ -6,6 +6,12 @@ library(Hmisc)
 library(ggplot2)
 library(ggcorrplot) 
 library(corrr)
+library(quanteda)
+library(quanteda.textplots)
+library(tidytext)
+library(topicmodels)
+library(seriation)
+library(viridis)
 ```
 
 # Update existing dataframe for policy-level challenge
@@ -67,6 +73,7 @@ df_sub <- df %>%
 ```
 
 #Draw graphs
+
 ```{r}
 #function for computing percentages of each column
 #Note: this percentage is computed by dividing the sum of each column by the total number of posts(1250). 
@@ -144,8 +151,11 @@ ggplot(data=df_total_grouped, aes(fill=Challenges, y=percentage, x=Group)) +
 ggsave("Challenge_Comparision.png", width=10, height=6) 
 
 ```
-# Draw some correlation matrix
-# In this section, I filtered out "no challenge posts" because we are trying to find relationships between challenges
+
+# Draw correlation matrices
+
+In this section, I filtered out "no challenge posts" because we are trying to find relationships between challenges
+
 ```{r} 
 
 #Function to return correlation matrix plot
@@ -196,3 +206,358 @@ df_sub %>%
 
 ```
 
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+# Draw plot of log odds ratios
+
+Read in the data:
+
+```{r} 
+text_df <-
+  readxl::read_xlsx('Files/Reddit_data_1250_challenges_with_texts.xlsx') %>%
+  filter(`Regular teachers` == 1 | 
+           `Substitute/part-time teachers` == 1) %>%
+  mutate(type = ifelse(`Regular teachers` == 1,
+                       "fulltime", 
+                       ifelse(`Substitute/part-time teachers` == 1,
+                       "parttime",
+                       "unknown")
+  ),
+  text = paste(Title, Content)
+  ) %>%
+  select(type, text, Title, Content)
+```
+
+## Compare words and topics between full-time and part-time teachers
+
+```{r}
+my_extra_stopwords <-
+  c("NA", "removed", "deleted", "just", "like")
+```
+
+### Topics of full-time teachers
+
+```{r}
+corpus_fulltime <-
+  text_df %>%
+  filter(type == 'fulltime') %>%
+  quanteda::corpus(text_field = 'text')
+
+dfm_fulltime <- 
+  corpus_fulltime %>%
+  quanteda::tokens(
+    remove_separators = TRUE,
+    remove_punct = TRUE,
+    remove_symbols = TRUE,
+    remove_numbers = TRUE,
+    remove_url = TRUE) %>%
+  quanteda::dfm(tolower = TRUE) %>%
+  quanteda::dfm_remove(c(my_extra_stopwords,
+                 quanteda::stopwords("english")))
+#dim(dfm_fulltime)
+quanteda::topfeatures(dfm_fulltime, scheme = "docfreq")
+```
+
+```{r}
+dfm_fulltime %>%
+  quanteda.textplots::textplot_wordcloud(
+    min_count = 10, 
+    random_order = FALSE, 
+    rotation = 0.25, 
+    color = viridis_pal()(8)
+  )
+```
+
+```{r}
+top_terms_fulltime <-
+  quanteda::topfeatures(dfm_fulltime, 
+                        scheme = "docfreq",
+                        n = length(quanteda::featnames(dfm_fulltime))
+  )
+
+top_terms_fulltime_df <-
+  tibble::tibble(term = names(top_terms_fulltime), 
+                 n_ft = top_terms_fulltime
+  ) %>%
+  mutate(p_ft = round(100 * n_ft / nrow(dfm_fulltime), 2),
+         odds_ft = (n_ft / nrow(dfm_fulltime)) / 
+           ((nrow(dfm_fulltime) - n_ft) / nrow(dfm_fulltime))
+         )
+head(top_terms_fulltime_df)
+```
+
+### Topics of part-time teachers
+
+```{r}
+corpus_parttime <-
+  text_df %>%
+  filter(type == 'parttime') %>%
+  quanteda::corpus(text_field = 'text')
+
+dfm_parttime <- 
+  corpus_parttime %>%
+  quanteda::tokens(
+    remove_separators = TRUE,
+    remove_punct = TRUE,
+    remove_symbols = TRUE,
+    remove_numbers = TRUE,
+    remove_url = TRUE) %>%
+  quanteda::dfm(tolower = TRUE) %>%
+  quanteda::dfm_remove(c(my_extra_stopwords,
+                 quanteda::stopwords("english")))
+#dim(dfm_parttime)
+```
+
+```{r}
+dfm_parttime %>%
+  quanteda.textplots::textplot_wordcloud(
+    min_count = 10, 
+    random_order = FALSE, 
+    rotation = 0.25, 
+    color = viridis_pal()(8)
+  )
+```
+
+### Analyze Co-Occurring Terms for Full-Time and Part-Time Teachers
+
+```{r}
+top_terms_parttime <-
+  quanteda::topfeatures(dfm_parttime, 
+                        scheme = "docfreq",
+                        n = length(quanteda::featnames(dfm_fulltime))
+  )
+
+top_terms_parttime_df <-
+  tibble::tibble(term = names(top_terms_parttime), 
+                 n_pt = top_terms_parttime
+  ) %>%
+  mutate(p_pt = round(100 * n_pt / nrow(dfm_parttime), 2),
+         odds_pt = (n_pt / nrow(dfm_parttime)) / 
+           ((nrow(dfm_parttime) - n_pt) / nrow(dfm_parttime))
+         )
+head(top_terms_parttime_df)
+```
+
+```{r}
+terms_comparison_table <-
+  top_terms_fulltime_df %>%
+  left_join(top_terms_parttime_df, by = 'term') %>%
+  mutate(across(n_ft:odds_pt, coalesce, 0),
+         odds_ratio = odds_ft / odds_pt,
+         log_odds_ratio = abs(log10(odds_ratio))
+         ) %>%
+  arrange(-odds_ft)
+head(terms_comparison_table)
+```
+```{r}
+terms_plot <- 
+terms_comparison_table %>%
+  filter(p_ft >= 5 | p_pt >= 5)
+```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=16, fig.height=9}
+ggplot(data = terms_plot, 
+       mapping = aes(x = p_ft, y = p_pt)) +
+  geom_point(alpha = 0.4, 
+             size = 15,
+             show.legend = TRUE,
+             aes(color = log_odds_ratio)) +
+  scale_color_viridis(rescaler = function(x, to = c(0, 1), from = NULL) {
+    ifelse(x < 0.75, 
+           scales::rescale(x,
+                           to = to,
+                           from = c(min(x, na.rm = TRUE), 0.75)),
+           1)
+  }
+  ) +
+  ggrepel::geom_label_repel(data = terms_plot,
+                            aes(label = term),
+                            show.legend = FALSE,
+                            size = 6,
+                            family = 'serif',
+                            check_overlap = TRUE,
+                            nudge_x = 0.15,
+                            nudge_y = 0.15
+  ) +
+  #geom_text(aes(label = hashtag), check_overlap = TRUE, nudge_y = 0, nudge_x = 0.0075, size = 7, family = 'serif') +
+  geom_abline(color = "red") +
+  theme_bw() + 
+  xlab("Percentage of Full-Time Teacher Posts with Term") +
+  ylab("Percentage of Part-Time Teacher Posts with Term") +
+  #xlim(0, 5) +
+  #ylim(0, 5) +
+  geom_hline(yintercept = 0, color = "black") + 
+  geom_vline(xintercept = 0, color = "black") +
+  theme(panel.border = element_rect(color = "gray80"),
+        panel.grid.major = element_line(color = "gray30"),
+        panel.grid.minor = element_line(color = "gray80"),
+        axis.title=element_text(size=24, family='serif'),
+        axis.text=element_text(size=18, family='serif')
+  ) +
+  labs(color = 'log odds ratio')
+```
+
+```{r, include=FALSE, eval=FALSE}
+ggsave("output/term-comparison-scatter-plot.png", width = 16, height = 9)
+```
+
+
+
+
+
+
+### Topics
+
+```{r, include=FALSE}
+lda_fulltime <- 
+  dfm_fulltime %>% 
+  topicmodels::LDA(k = 5, control = list(seed = 10202022))
+topics_fulltime <- 
+  tidytext::tidy(lda_fulltime, matrix = "beta")
+
+top_terms_fulltime <- 
+  topics_fulltime %>%
+  group_by(topic) %>%
+  top_n(20, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) %>%
+  mutate(topic = str_c("FT-", topic))
+
+#top_terms_fulltime$term <- 
+#  factor(top_terms_fulltime$term, levels = sort(unique(top_terms_fulltime$term)))
+```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=16, fig.height=9}
+top_terms_fulltime %>%
+  #mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(x = term, 
+             y  = beta, 
+             fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = 'fixed') +
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(top_terms_fulltime$term))) +
+  theme_bw() +
+  xlab("Term") +
+  ylab("Topic-Word Density") +
+  theme(axis.title=element_text(size=28, family='serif'),
+        axis.text=element_text(size=16, family='serif')
+  )
+```
+
+```{r, include=FALSE, eval=FALSE}
+ggsave("output/topics-fulltime.png", width = 16, height = 9)
+```
+
+```{r, include=FALSE}
+lda_parttime <- 
+  dfm_parttime %>% 
+  topicmodels::LDA(k = 5, control = list(seed = 10202022))
+topics_parttime <- 
+  tidytext::tidy(lda_parttime, matrix = "beta")
+
+top_terms_parttime <- 
+  topics_parttime %>%
+  group_by(topic) %>%
+  top_n(20, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) %>%
+  mutate(topic = str_c("PT-", topic))
+
+#top_terms_parttime$term <- 
+#  factor(top_terms_parttime$term, levels = sort(unique(top_terms_parttime$term)))
+```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=16, fig.height=9}
+top_terms_parttime %>%
+  #mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(x = term, 
+             y  = beta, 
+             fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = 'fixed') +
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(top_terms_parttime$term))) +
+  theme_bw() +
+  xlab("Term") +
+  ylab("Topic-Word Density") +
+  theme(axis.title=element_text(size=28, family='serif'),
+        axis.text=element_text(size=16, family='serif')
+  )
+```
+
+```{r, include=FALSE, eval=FALSE}
+ggsave("output/topics-parttime.png", width = 16, height = 9)
+```
+
+### Compare topics of full-time and part-time teachers
+
+```{r, include=FALSE}
+top_terms_fulltime_parttime <-
+  top_terms_fulltime %>%
+  full_join(top_terms_parttime, by = c("topic", "term", "beta")) %>%
+  complete(topic, term, fill = list(beta = 0))
+
+top_terms_fulltime_parttime_matrix <-
+  top_terms_fulltime_parttime %>%
+  pivot_wider(names_from = topic,
+              values_from = beta) %>%
+  column_to_rownames('term') %>%
+  as.matrix()
+  
+top_terms_fulltime_parttime_seriation <-  
+  top_terms_fulltime_parttime_matrix %>%
+  seriation::seriate()
+
+terms_ordered <-
+  unique(top_terms_fulltime_parttime$term)[get_order(top_terms_fulltime_parttime_seriation, dim=1)]
+topics_ordered <-
+  unique(top_terms_fulltime_parttime$topic)[get_order(top_terms_fulltime_parttime_seriation, dim=2)]
+
+top_terms_fulltime_parttime_to_plot <-
+  top_terms_fulltime_parttime %>%
+  mutate(topic = factor(topic, levels = unique(top_terms_fulltime_parttime$topic)),  # topics_orderedq
+         term = factor(term, levels = terms_ordered)
+  )
+```
+
+```{r, echo=FALSE, fig.width=16, fig.height=12}
+ggplot(top_terms_fulltime_parttime_to_plot, aes(x = topic, y = term)) +
+        geom_tile(aes(fill = beta), color = 'white', size = 0.2) + 
+        scale_fill_viridis(rescaler = function(x, to = c(0, 1), from = NULL) {
+                ifelse(x < .010, 
+                       scales::rescale(x,
+                                       to = to,
+                                       from = c(min(x, na.rm = TRUE), .012)), 
+                       1)
+        }
+        ) +
+        xlab("Topic") +
+        scale_x_discrete(position='bottom') +
+        ylab("Term") +
+        scale_y_discrete(position='right') +
+        theme_bw() +
+        theme(axis.title = element_text(size=28, family='serif'),
+              axis.text = element_text(size=20, family='serif'),
+              legend.title = element_text(size=14, family='serif'), 
+              legend.text = element_text(size=14, family='serif'),
+              legend.position='left',
+              legend.background = element_blank(),
+              legend.box.background = element_rect(colour='black'),
+              panel.background = element_blank(),
+              panel.border = element_blank(),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              plot.background = element_blank()
+        ) +
+        labs(fill = "Topic-Word Density")
+```
+
+```{r, include=FALSE, eval=FALSE}
+ggsave("output/topics-fulltime-parttime-questions.png", width = 16, height = 12)
+```
