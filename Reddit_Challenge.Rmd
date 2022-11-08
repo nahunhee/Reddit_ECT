@@ -1,4 +1,5 @@
-#for Reddit Challenge 
+# for Reddit Challenges Project
+
 ```{r echo=FALSE}
 library(tidyverse)
 library(corrplot)
@@ -16,7 +17,8 @@ library(viridis)
 
 # Update existing dataframe for policy-level challenge
 # ALREADY PROCESSED! DON'T NEED TO RUN THIS BLOCK AGAIN
-```{r}
+
+```{r, eval = FALSE}
 all_df <- readxl::read_xlsx('Files/Reddit_data_2806_July_1.xlsx')
 df <- readxl::read_xlsx('Files/Comparison_Policy-level_107.xlsx')
 df <- df %>%
@@ -29,6 +31,7 @@ writexl::write_xlsx(all_df, 'Files/Reddit_data_2806_policy_update.xlsx')
 ```
 
 # Make a dataset containing title, content, challenges, and teacher types
+
 ```{r}
 df <- readxl::read_xlsx('Files/Reddit_data_2806_policy_update.xlsx')
 colnames(df)
@@ -43,6 +46,7 @@ writexl::write_xlsx(df, 'Files/Reddit_data_1250_challenges_with_texts.xlsx')
 ```
 
 # Filtering and pre-processing data
+
 ```{r}
 df <- readxl::read_xlsx('Files/Reddit_data_1250_challenges_with_texts.xlsx')
 df <- df%>%
@@ -72,7 +76,7 @@ df_sub <- df %>%
   select(-c("Regular teachers", "Substitute/part-time teachers"))
 ```
 
-#Draw graphs
+# Draw graphs
 
 ```{r}
 #function for computing percentages of each column
@@ -104,18 +108,31 @@ df_total %>%
   ) %>%
   mutate(Category = factor(Category, levels = unique(Category))) %>% #levels : this is for re-ordering bars
   ggplot(aes(fill=Challenges, y=percentage, x=Category )) + 
-    geom_bar(position="stack", stat="identity") +  
-    # geom_text(aes(label = Challenges),  position="stack", stat="identity", vjust = 1.5) +
-    theme_bw() + 
-    theme(
-      axis.text.x = element_text(angle = 0, vjust = 0, hjust=0.5), 
-      # plot.title = element_text(face = "bold", size = 12), 
-      # legend.position = "none", 
-      axis.ticks =  element_line(colour = "grey70", size = 0.2),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank()
-    )+
-    labs(y= "Proportion", x = "Challenges frame by Socio-ecology model") 
+  geom_bar(position="stack", stat="identity") + 
+  # geom_text(aes(label = Challenges),  position="stack", stat="identity", vjust = 1.5) +
+  theme_bw() + 
+  theme(
+    axis.text.x = element_text(angle = 0, vjust = 0, hjust=0.5), 
+    axis.title=element_text(size = 20, family='serif'),
+    axis.text=element_text(size = 14, family='serif'),
+    legend.title = element_text(size = 14, family='serif'), 
+    legend.text = element_text(size = 10, family='serif'),
+    legend.position = 'right',
+    legend.background = element_blank(),
+    legend.box.background = element_rect(colour='black'),
+    # plot.title = element_text(face = "bold", size = 12), 
+    # legend.position = "none", 
+    axis.ticks =  element_line(colour = "grey80", size = 0.2),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.border = element_rect(color = "gray80")
+  ) +
+  labs(y = "Percentage", x = "Challenges framed by the Socio-Ecology Model") 
+
+ggsave("output/challenges-overall.png", width=10, height=6) 
+
+
+
 
 df_regular_grouped <- df_regular %>%
   getCount_Percentage() %>%
@@ -133,23 +150,34 @@ df_total_grouped <- rbind(df_regular_grouped, df_sub_grouped) %>%
                     ifelse(Challenges == 'Policy', 'Public policy', 0)))))
   ) %>%
   mutate(Category = factor(Category, levels = unique(Category))) #this one is for re-ordering bars
-  
+
 ggplot(data=df_total_grouped, aes(fill=Challenges, y=percentage, x=Group)) +
   geom_bar(stat = "identity",
            position = "stack") +
   facet_grid(~ Category) +
   theme_bw() + 
-    theme(  
-      axis.text.x=element_blank(), #remove x axis labels
-      axis.ticks.x=element_blank(), #remove x axis ticks
-      # axis.ticks =  element_line(colour = "grey70", size = 0.2),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank()
-    )+
-    labs(y= "Proportion", x = "Teacher of Full-time (left), temporary (right) job position") 
+  theme(  
+    axis.title = element_text(size=20, family='serif'),
+    axis.text.y = element_text(size=14, family='serif'),
+    axis.text.x = element_blank(), #remove x axis labels
+    strip.text.x = element_text(size = 16, family='serif'),
+    legend.title = element_text(size = 14, family='serif'), 
+    legend.text = element_text(size = 10, family='serif'),
+    legend.position='right',
+    legend.background = element_blank(),
+    legend.box.background = element_rect(colour='black'),
+    axis.ticks.x = element_blank(), #remove x axis ticks
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    # plot.title = element_text(face = "bold", size = 12), 
+    # legend.position = "none", 
+    # axis.ticks =  element_line(colour = "grey80", size = 0.2),
+    panel.border = element_rect(color = "gray80")
+  ) +
+    labs(y= "Percentage", 
+         x = "Challenges of Full-Time (left) and Temporary (right) Teachers") 
 
-ggsave("Challenge_Comparision.png", width=10, height=6) 
-
+ggsave("output/challenges-comparision.png", width=10, height=6) 
 ```
 
 # Draw correlation matrices
@@ -340,7 +368,6 @@ top_terms_parttime_df <-
          odds_pt = (n_pt / nrow(dfm_parttime)) / 
            ((nrow(dfm_parttime) - n_pt) / nrow(dfm_parttime))
          )
-head(top_terms_parttime_df)
 ```
 
 ```{r}
@@ -361,17 +388,17 @@ terms_comparison_table %>%
 ```
 
 ```{r, echo=FALSE, warning=FALSE, fig.width=16, fig.height=9}
-ggplot(data = terms_plot, 
+ggplot(data = terms_comparison_table, 
        mapping = aes(x = p_ft, y = p_pt)) +
   geom_point(alpha = 0.4, 
              size = 15,
              show.legend = TRUE,
              aes(color = log_odds_ratio)) +
   scale_color_viridis(rescaler = function(x, to = c(0, 1), from = NULL) {
-    ifelse(x < 0.75, 
+    ifelse(x < 0.5, 
            scales::rescale(x,
                            to = to,
-                           from = c(min(x, na.rm = TRUE), 0.75)),
+                           from = c(min(x, na.rm = TRUE), 0.5)),
            1)
   }
   ) +
@@ -405,6 +432,65 @@ ggplot(data = terms_plot,
 ```{r, include=FALSE, eval=FALSE}
 ggsave("output/term-comparison-scatter-plot.png", width = 16, height = 9)
 ```
+
+### Zoomed-In Plot
+
+```{r, echo=FALSE, warning=FALSE, fig.width=16, fig.height=9}
+ggplot(data = terms_comparison_table, 
+       mapping = aes(x = p_ft, y = p_pt)) +
+  geom_point(alpha = 0.4, 
+             size = 15,
+             show.legend = TRUE,
+             aes(color = log_odds_ratio)) +
+  scale_color_viridis(rescaler = function(x, to = c(0, 1), from = NULL) {
+    ifelse(x < 0.5, 
+           scales::rescale(x,
+                           to = to,
+                           from = c(min(x, na.rm = TRUE), 0.5)),
+           1)
+  }
+  ) +
+  ggrepel::geom_label_repel(data = terms_plot,
+                            aes(label = term),
+                            show.legend = FALSE,
+                            size = 6,
+                            family = 'serif',
+                            check_overlap = TRUE,
+                            nudge_x = 0.15,
+                            nudge_y = 0.15
+  ) +
+  #geom_text(aes(label = hashtag), check_overlap = TRUE, nudge_y = 0, nudge_x = 0.0075, size = 7, family = 'serif') +
+  geom_abline(color = "red") +
+  theme_bw() + 
+  xlab("Percentage of Full-Time Teacher Posts with Term") +
+  ylab("Percentage of Part-Time Teacher Posts with Term") +
+  xlim(0, 20) +
+  ylim(0, 20) +
+  geom_hline(yintercept = 0, color = "black") + 
+  geom_vline(xintercept = 0, color = "black") +
+  theme(panel.border = element_rect(color = "gray80"),
+        panel.grid.major = element_line(color = "gray30"),
+        panel.grid.minor = element_line(color = "gray80"),
+        axis.title=element_text(size=24, family='serif'),
+        axis.text=element_text(size=18, family='serif')
+  ) +
+  labs(color = 'log odds ratio')
+```
+
+```{r, include=FALSE, eval=FALSE}
+ggsave("output/term-comparison-scatter-plot-zoomed.png", width = 16, height = 9)
+```
+
+```{r}
+top_terms_difference <- 
+  terms_plot %>% 
+  arrange(desc(log_odds_ratio)) %>% 
+  head(100)
+write_csv(top_terms_difference, "output/top-terms-difference.csv")
+```
+
+
+
 
 
 
