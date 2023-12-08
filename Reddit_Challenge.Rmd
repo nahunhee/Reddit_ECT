@@ -1,6 +1,6 @@
 # for Reddit Challenges Project
 
-```{r echo=FALSE}
+```{r, echo=FALSE, message=FALSE}
 library(tidyverse)
 library(corrplot)
 library(Hmisc) 
@@ -30,9 +30,12 @@ all_df
 writexl::write_xlsx(all_df, 'Files/Reddit_data_2806_policy_update.xlsx')
 ```
 
+
+################################################################################
+
 # Make a dataset containing title, content, challenges, and teacher types
 
-```{r}
+```{r, eval=FALSE}
 df <- readxl::read_xlsx('Files/Reddit_data_2806_policy_update.xlsx')
 colnames(df)
 df <- df %>%
@@ -44,6 +47,22 @@ colnames(df) <- c("Title", "Content", "High workload", "Insufficient support", "
 
 writexl::write_xlsx(df, 'Files/Reddit_data_1250_challenges_with_texts.xlsx')
 ```
+
+################################################################################
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+# START HERE
+################################################################################
 
 # Filtering and pre-processing data
 
@@ -76,6 +95,8 @@ df_sub <- df %>%
   select(-c("Regular teachers", "Substitute/part-time teachers"))
 ```
 
+
+
 # Draw graphs
 
 ```{r}
@@ -98,43 +119,54 @@ getCount_Percentage <- function(dataframe){
   return(df_temp)
 }
 
-df_total %>%
+df_total_overall <- 
+  df_total %>%
   getCount_Percentage() %>%
   mutate(Category = ifelse(Challenges == 'Personal concerns', 'Personal', 
-                    ifelse(Challenges == 'Planning' | Challenges == 'Instruct' | Challenges == 'Classroom management', 'Interpersonal',
-                    ifelse(Challenges == 'High workload' | Challenges == 'Insufficient support' | Challenges == 'Relationships with other teachers', 'Institutional',
-                    ifelse(Challenges == 'Communication with parents', 'Community',
-                    ifelse(Challenges == 'Policy', 'Public policy', 0)))))
+                           ifelse(Challenges == 'Planning' | Challenges == 'Instruct' | Challenges == 'Classroom management', 'Interpersonal',
+                                  ifelse(Challenges == 'High workload' | Challenges == 'Insufficient support' | Challenges == 'Relationships with other teachers', 'Institutional',
+                                         ifelse(Challenges == 'Communication with parents', 'Community',
+                                                ifelse(Challenges == 'Policy', 'Public policy', 0)))))
   ) %>%
-  mutate(Category = factor(Category, levels = unique(Category))) %>% #levels : this is for re-ordering bars
-  ggplot(aes(fill=Challenges, y=percentage, x=Category )) + 
-  geom_bar(position="stack", stat="identity") + 
-  # geom_text(aes(label = Challenges),  position="stack", stat="identity", vjust = 1.5) +
+  mutate(Group = 1) %>%
+  mutate(Category = factor(Category, levels = unique(Category))) #levels : this is for re-ordering bars
+```
+
+```{r}
+ggplot(df_total_overall, aes(x = Category, y = percentage, fill = Challenges)) + 
+  geom_bar(position = "stack", stat = "identity", color = "black") + 
+  scale_fill_manual(values = viridis::turbo(9), name = "Challenges:") +
+  scale_y_continuous(limits = c(0, 50)) + 
+  geom_hline(yintercept = 0) +
   theme_bw() + 
-  theme(
-    axis.text.x = element_text(angle = 0, vjust = 0, hjust=0.5), 
-    axis.title=element_text(size = 20, family='serif'),
-    axis.text=element_text(size = 14, family='serif'),
-    legend.title = element_text(size = 14, family='serif'), 
-    legend.text = element_text(size = 10, family='serif'),
-    legend.position = 'right',
-    legend.background = element_blank(),
-    legend.box.background = element_rect(colour='black'),
-    # plot.title = element_text(face = "bold", size = 12), 
-    # legend.position = "none", 
-    axis.ticks =  element_line(colour = "grey80", size = 0.2),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.border = element_rect(color = "gray80")
+  theme(panel.border = element_blank(),
+        panel.grid.major.y = element_line(color = "gray85"),
+        panel.grid.minor.y = element_line(color = "gray90"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 11, family='serif', 
+                                   face = 'bold', color = "black", vjust = 4),
+        axis.text.y = element_text(size = 14, family='serif'),
+        axis.title = element_text(size = 16, family='serif'),
+        legend.title = element_text(size = 14, family='serif', face = 'bold'), 
+        legend.text = element_text(size = 10, family='serif'),
+        legend.position = 'right',
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour='black')
   ) +
-  labs(y = "Percentage", x = "Challenges framed by the Socio-Ecology Model") 
+  labs(y = "Percentage", x = "Challenges Framed by the Socio-Ecological Model") 
+```
 
-ggsave("output/challenges-overall.png", width=10, height=6) 
+```{r}
+ggsave("output/challenges-overall.png", width=8, height=4.5)
+```
 
 
 
-
-df_regular_grouped <- df_regular %>%
+```{r}
+df_regular_grouped <- 
+  df_regular %>%
   getCount_Percentage() %>%
   mutate(Group = 1)
 
@@ -150,42 +182,53 @@ df_total_grouped <- rbind(df_regular_grouped, df_sub_grouped) %>%
                     ifelse(Challenges == 'Policy', 'Public policy', 0)))))
   ) %>%
   mutate(Category = factor(Category, levels = unique(Category))) #this one is for re-ordering bars
-
-ggplot(data=df_total_grouped, aes(fill=Challenges, y=percentage, x=Group)) +
-  geom_bar(stat = "identity",
-           position = "stack") +
-  facet_grid(~ Category) +
-  theme_bw() + 
-  theme(  
-    axis.title = element_text(size=20, family='serif'),
-    axis.text.y = element_text(size=14, family='serif'),
-    axis.text.x = element_blank(), #remove x axis labels
-    strip.text.x = element_text(size = 16, family='serif'),
-    legend.title = element_text(size = 14, family='serif'), 
-    legend.text = element_text(size = 10, family='serif'),
-    legend.position='right',
-    legend.background = element_blank(),
-    legend.box.background = element_rect(colour='black'),
-    axis.ticks.x = element_blank(), #remove x axis ticks
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    # plot.title = element_text(face = "bold", size = 12), 
-    # legend.position = "none", 
-    # axis.ticks =  element_line(colour = "grey80", size = 0.2),
-    panel.border = element_rect(color = "gray80")
-  ) +
-    labs(y= "Percentage", 
-         x = "Challenges of Full-Time (left) and Temporary (right) Teachers") 
-
-ggsave("output/challenges-comparision.png", width=10, height=6) 
 ```
+
+```{r}
+ggplot(data = df_total_grouped, 
+       aes(x = Group, y = percentage, fill = Challenges)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  scale_fill_manual(values = viridis::turbo(9), name = "Challenges:") +
+  #scale_x_discrete(expand=expansion(add=1)) +
+  scale_y_continuous(limits = c(0, 50)) + 
+  geom_hline(yintercept = 0) +
+  facet_wrap(~ Category, nrow = 1, strip.position = 'bottom') +
+  theme_bw() + 
+  theme(panel.border = element_blank(),
+        panel.grid.major.y = element_line(color = "gray85"),
+        panel.grid.minor.y = element_line(color = "gray90"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 14, family='serif'),
+        axis.title = element_text(size = 16, family='serif'),
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 11, family='serif', face = 'bold', vjust = 2),
+        panel.spacing.x = unit(0, "null"),
+        legend.title = element_text(size = 14, family='serif', face = 'bold'), 
+        legend.text = element_text(size = 10, family='serif'),
+        legend.position = 'right',
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour='black')
+  ) +
+  scale_x_discrete(expand=expand_scale(add = 0.4)) +
+  labs(y = "Percentage", x = "Challenges of Full-Time (Left) and Temporary (Right) Teachers")
+```
+
+```{r}
+ggsave("output/challenges-comparison.png", width=8, height=4.5) 
+```
+
+
+
+################################################################################
 
 # Draw correlation matrices
 
 In this section, I filtered out "no challenge posts" because we are trying to find relationships between challenges
 
 ```{r} 
-
 #Function to return correlation matrix plot
 #Now... asterisks are overlapped with texts...
 drawCorrelationMatrix <- function(dataframe, font_size = 1){ 
@@ -231,16 +274,14 @@ df_sub %>%
   mutate(`Public policy` = ifelse(Policy == 1, 1, 0)) %>%
   .[,10:14] %>%
   drawCorrelationMatrix()
-
 ```
 
 
 
 
 
+################################################################################
 
-
---------------------------------------------------------------------------------
 # Draw plot of log odds ratios
 
 Read in the data:
@@ -430,7 +471,7 @@ ggplot(data = terms_comparison_table,
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-ggsave("output/term-comparison-scatter-plot.png", width = 16, height = 9)
+ggsave("output/term-comparison-scatter-plot.png", width = 8, height = 4.5)
 ```
 
 ### Zoomed-In Plot
@@ -478,7 +519,7 @@ ggplot(data = terms_comparison_table,
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-ggsave("output/term-comparison-scatter-plot-zoomed.png", width = 16, height = 9)
+ggsave("output/term-comparison-scatter-plot-zoomed.png", width = 8, height = 4.5)
 ```
 
 ```{r}
@@ -537,7 +578,7 @@ top_terms_fulltime %>%
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-ggsave("output/topics-fulltime.png", width = 16, height = 9)
+ggsave("output/topics-fulltime.png", width = 8, height = 4.5)
 ```
 
 ```{r, include=FALSE}
@@ -578,7 +619,7 @@ top_terms_parttime %>%
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-ggsave("output/topics-parttime.png", width = 16, height = 9)
+ggsave("output/topics-parttime.png", width = 8, height = 4.5)
 ```
 
 ### Compare topics of full-time and part-time teachers
@@ -645,5 +686,5 @@ ggplot(top_terms_fulltime_parttime_to_plot, aes(x = topic, y = term)) +
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-ggsave("output/topics-fulltime-parttime-questions.png", width = 16, height = 12)
+ggsave("output/topics-fulltime-parttime-questions.png", width = 8, height = 6)
 ```
